@@ -1,0 +1,245 @@
+---
+title: "Statistical Computing Project"
+author: "Grace Brandt"
+date: "2025-05-02"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+library(ISLR2)
+library(tidyverse)
+library(dlookr)
+library(GGally)
+library(car)
+library(ggplot2)
+library(tableone)
+library(table1)
+library(effsize)
+library(bootES)
+library(MASS)
+library(car)
+library(heplots)
+```
+
+```{r}
+data(Credit)
+```
+
+
+Table 1.
+
+```{r, warning=FALSE}
+caption <- "Table 1. Descriptive statistics by student status of variables 
+regarding credit card customers"
+footnote <- "Source: R package (ISLR2), data=Credit"
+label(Credit$Income) <- "Income"
+label(Credit$Age) <- "Age"
+label(Credit$Balance) <- "Balance"
+units(Credit$Income) <- "$1,000s"
+units(Credit$Age) <- "yrs"
+units(Credit$Balance) <- "$"
+Credit$Student <- factor(Credit$Student, levels=c("Yes", "No"), 
+                              labels=c("Student", "Non-student"))
+table1(~ Income+Rating+Age+Region+Balance | Student, data=Credit, caption=caption, 
+       footnote=footnote, topclass="Rtable1-times Rtable1-zebra Rtable1-shade")
+```
+
+
+Univariate EDA
+
+```{r, fig.height=3, fig.width=5}
+summary(Credit$Balance)
+hist(Credit$Balance, main="Histogram of Balance in Credit Dataset", xlab="Balance ($)")
+```
+
+```{r, message=FALSE, warning=FALSE}
+new <- Credit[ ,c(1, 3, 5, 8, 10, 11)]
+normality(new)
+```
+
+
+Before moving into multivariate analysis, it is important to note that our outcome variable, Balance, is significantly right-skewed, so future data analysts may want to consider a transformation of the data or nonparametric methods. The Balance variable has a mean of 520.01 dollars, and a median of 459.50 dollars (significantly less than mean). The variables Income, Rating, and Age and also very right skewed.
+
+
+Correlation, Effect Size (numeric)
+
+```{r, message=FALSE, warning=FALSE}
+correlate(new, Balance)
+
+#pearson r
+cor_income<-cor.test(Credit$Income,Credit$Balance)
+cor_income$estimate; cor_income$conf.int
+
+cor_rating<-cor.test(Credit$Rating,Credit$Balance)
+cor_rating$estimate; cor_rating$conf.int
+
+cor_age<-cor.test(Credit$Age,Credit$Balance)
+cor_age$estimate; cor_age$conf.int
+
+new |>
+  correlate() |>
+  plot()
+```
+
+
+```{r, fig.height=3, fig.width=5}
+new |> 
+  ggplot(aes(x=Income, y=Balance)) +
+  geom_point() +
+  geom_smooth(method="lm",se=F)
+new |> 
+  ggplot(aes(x=Rating, y=Balance)) +
+  geom_point() +
+  geom_smooth(method="lm",se=F)
+new |> 
+  ggplot(aes(x=Age, y=Balance)) +
+  geom_point() +
+  geom_smooth(method="lm",se=F)
+```
+
+Effect Size, Partial Eta Squared 
+
+```{r}
+response <- cbind(Credit$Income, Credit$Rating, iris$Age)
+manova_model <- manova(response ~ Balance, data = Credit)
+
+summary(manova_model)
+
+partial_eta_squared <- etasq(manova_model, anova = TRUE)
+partial_eta_squared
+```
+
+
+First, we will address the numeric variables Income, Rating, and Age. The given correlation between Income and Balance is 0.463656457, with a 95% confidence interval of (0.3830176, 0.5372821), which is reaffirmed by the scatterplot, showing moderate clustering around a moderate slope, suggesting a moderately strong, positive, linear relationship. The given correlation between Rating and Balance is 0.863625161, with a 95% confidence interval of (0.8363997, 0.8865997), which is reaffirmed by the scatterplot, showing significant clustering around a steeper slope, suggesting a strong, positive, linear relationship. In contrast, the given correlation between Age and Balance is 0.001835119, with a 95% confidence interval of (-0.09623392, 0.09986887), which is reaffirmed by the scatterplot, showing random scatter and almost no slope, suggesting no linear relationship (interval includes 0). This prompts future regression modelling, and suggests that Rating, and possibly Income, may be significant predictors of Balance. 
+
+Also, from the eta-squared function, the output eta^2 = 0.8751179 indicates that approximately 87.5% of the variance in the response variables (Income, Rating, Age) can be explained by the explanatory variable (Balance) in the MANOVA model (despite the fact that Income, Rating, and Age are our predictors and Balance is our outcome variable, this can give us some more insight into the relationships between these variables).
+
+
+
+
+```{r}
+new |>
+  ggplot(aes(x=Student, y=Balance)) +
+  geom_boxplot()
+new |>
+  ggplot(aes(x=Region, y=Balance)) +
+  geom_boxplot()
+summary(Credit$Balance[Credit$Student=="Yes"])
+summary(Credit$Balance[Credit$Student=="No"])
+```
+
+
+EDA - Violin Plots
+
+```{r, fig.height=3, fig.width=5}
+v_s <- new |>
+  ggplot(aes(x=Student, y=Balance)) +
+  geom_violin(col="purple", fill="pink")
+v_s + geom_boxplot(width=0.1)
+
+v_r <- new |>
+  ggplot(aes(x=Region, y=Balance)) +
+  geom_violin(col="purple", fill="pink")
+v_r + geom_boxplot(width=0.1)
+```
+
+Now, we may address the categorical variables Student and Region. The boxplots and violin plots of Balance by Student status show significant differences, with students having a higher median Balance (953.0) than customers who are not students (953.0). However, it is worth noting that the data includes 360 non-students, and only 40 students, so these differences may not be as reliable as they would be if the data was more balanced in this variable. This prompts further investigation on the relationship between Student status and Balance. For the variable Region, Balance is largely the same among the South, East, and West regions, suggesting that Region has little effect on Balance.
+
+
+```{r}
+new |>
+  group_by(Student) |>
+  summarize(correlation = cor(Balance, Rating))
+
+new |>
+  group_by(Region) |>
+  summarize(correlation = cor(Balance, Rating))
+
+new |>
+  group_by(Student) |>
+  summarize(correlation = cor(Balance, Income))
+
+new |>
+  group_by(Region) |>
+  summarize(correlation = cor(Balance, Income))
+
+new |>
+  group_by(Student) |>
+  summarize(correlation = cor(Balance, Age))
+
+new |>
+  group_by(Region) |>
+  summarize(correlation = cor(Balance, Age))
+```
+
+To learn a bit more about the influence of the Student variable, I looked into correlations conditioning for student status. Student status seems to have a small impact on the correlation between Balance and Rating (nonstudent:0.9009001, student:0.8502731), a larger impact on the correlation between Balance and Income (nonstudent:0.4939930, student:0.3318966), and (as expected, since there was little correlation to begin with), little impact on Balance and Age (nonstudent: 0.02034441, student:-0.08641411). I did the same for the Region variable, finding similar results, being that Region has a small impact on Balance/Rating (east:0.8876652, south:0.8498100, west:0.8642646), a larger impact on Balance/Income (east:0.5956708, south:0.3766654, west:0.4677189), and very little impact on Balance/Age (east:0.01489386, south:-0.03298862, west:0.04797045). This prompts some more investigation on how the correlation between Balance and Income is impacted by Student status and Region.
+
+
+Effect Size (categorical)
+```{r}
+cohen.d(Balance~Student,data=Credit,hedges.correction=F)
+
+tapply(Credit$Balance,Credit$Region,mean)
+bootES(Credit, R=2000, data.col="Balance",
+       group.col ="Region",contrast = c("East"=.5,"West"=.5, "South"=-1),
+       effect.type = c("cohens.d"),
+       ci.type = c("bca"),
+       ci.conf = .95,
+       plot=F)
+```
+
+For effect size for the Student variable, I used Cohen's d, which gave an estimate of -0.8916607, with a 95% confidence interval of (-1.2251276, -0.5581937). This suggests that the student-status-based difference in balance is about 0.8916607 SDs in size (large), with students having a larger balance than nonstudents. For the Region variable, using a bootstrapping method for 3 groups, the given 95% confidence interval will, of course, vary every time, but is roughly (-0.182, 0.197). Since this interval contains 0, we cannot conclude that there is a significant difference in Balance among the regions.
+
+
+Outliers
+```{r, fig.height=3, fig.width=3}
+data(Credit)
+south <- Credit$Balance[Credit$Region=="South"]
+new <- data.frame(south, scale(south))
+z_out <- new[order(new$south,new$scale.south, decreasing = TRUE),]
+z_out[1:6, ]
+
+car::Boxplot(south,id=list(n=Inf))
+b<-boxplot(south)
+b$out
+b$stats
+
+nonstudent <- Credit$Balance[Credit$Student=="No"]
+new <- data.frame(nonstudent, scale(nonstudent))
+z_out <- new[order(new$nonstudent,new$scale.nonstudent, decreasing = TRUE),]
+z_out[1:6, ]
+
+car::Boxplot(nonstudent,id=list(n=Inf))
+b<-boxplot(nonstudent)
+b$out
+b$stats
+```
+
+The boxplots of Student and Region also suggest the existence of outliers among non-students and the south region. Using the boxplot outlier detection method, the south region has one upper outlier (1999), and the nonstudents don't have outliers. The z-score method affirms that the south region has an upper outlier at 1999, but also has 5 other outliers (1587, 1549, 1448, 1426, 1407), and it shows that the nonstudents have 6 upper outliers (1999, 1809, 1779, 1677, 1597, 1573). These outliers don't seem to have a significant influence on the distributions, but may be worth noting for future modeling and investigation.
+
+
+-------------------------------------------------------------------------------------------------------------------------------
+
+
+(Copy of all paragraphs throughout project)
+
+Before moving into multivariate analysis, it is important to note that our outcome variable, Balance, is significantly right-skewed, so future data analysts may want to consider a transformation of the data or nonparametric methods. The Balance variable has a mean of 520.01, and a median of 459.50 (significantly less than mean). The variables Income, Rating, and Age and also very right skewed.
+
+First, we will address the numeric variables Income, Rating, and Age. The given correlation between Income and Balance is 0.463656457, with a 95% confidence interval of (0.3830176, 0.5372821), which is reaffirmed by the scatterplot, showing moderate clustering around a moderate slope, suggesting a moderately strong, positive, linear relationship. The given correlation between Rating and Balance is 0.863625161, with a 95% confidence interval of (0.8363997, 0.8865997), which is reaffirmed by the scatterplot, showing significant clustering around a steeper slope, suggesting a strong, positive, linear relationship. In contrast, the given correlation between Age and Balance is 0.001835119, with a 95% confidence interval of (-0.09623392, 0.09986887), which is reaffirmed by the scatterplot, showing random scatter and almost no slope, suggesting no linear relationship (interval includes 0). This prompts future regression modelling, and suggests that Rating, and possibly Income, might be significant predictors of Balance. 
+
+Also, from the eta-squared function, the output eta^2 = 0.8751179 indicates that approximately 87.5% of the variance in the response variables (Income, Rating, Age) can be explained by the explanatory variable (Balance) in the MANOVA model (despite the fact that Income, Rating, and Age are our predictors and Balance is our outcome variable, this can give us some more insight into the relationships between these variables).
+
+Now, we may address the categorical variables Student and Region. The boxplots and violin plots of Balance by Student status show significant differences, with students having a higher median average Balance (953.0) than customers who are not students (953.0). However, it is worth noting that the data includes 360 non-students, and only 40 students, so these differences may not be as reliable as they would be if the data was more balanced in this variable. This prompts further investigation on the relationship between Student status and Balance. For the variable Region, Balance is largely the same among the South, East, and West regions, suggesting that Region has little effect on Balance. 
+
+To learn a bit more about the influence of the Student variable, I looked into correlations conditioning for student status. Student status seems to have a small impact on the correlation between Balance and Rating (nonstudent:0.9009001, student:0.8502731), a larger impact on the correlation between Balance and Income (nonstudent:0.4939930, student:0.3318966), and (as expected, since there was little correlation to begin with), little impact on Balance and Age (nonstudent: 0.02034441, student:-0.08641411). I did the same for the Region variable, finding similar results, being that Region has a small impact on Balance/Rating (east:0.8876652, south:0.8498100, west:0.8642646), a larger impact on Balance/Income (east:0.5956708, south:0.3766654, west:0.4677189), and very little impact on Balance/Age (east:0.01489386, south:-0.03298862, west:0.04797045). This prompts some more investigation on how the correlation between Balance and Income is impacted by Student status and Region. 
+
+For effect size for the Student variable, I used Cohen's d, which gave an estimate of -0.8916607, with a 95% confidence interval of (-1.2251276, -0.5581937). This suggests that the student-status-based difference in balance is about 0.8916607 SDs in size (large), with students having a larger balance than nonstudents. For the Region variable, using a bootstrapping method for 3 groups, the given 95% confidence interval will, of course, vary every time, but is roughly (-0.182, 0.197). Since this interval contains 0, we cannot conclude that there is a significant difference in balance among the regions. 
+
+The boxplots of Student and Region also suggest the existence of outliers among non-students and the south region. Using the boxplot outlier detection method, the south region has one upper outlier (1999), and the nonstudents don't have outliers. The z-score method affirms that the south region has an upper outlier at 1999, but also has 5 other outliers (1587, 1549, 1448, 1426, 1407), and it shows that the nonstudents have 6 upper outliers (1999, 1809, 1779, 1677, 1597, 1573). These outliers don't seem to have a significant influence on the distributions, but may be worth noting for future modeling and investigation. 
+
+
