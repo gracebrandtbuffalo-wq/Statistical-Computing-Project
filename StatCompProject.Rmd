@@ -2,7 +2,9 @@
 title: "Statistical Computing Project"
 author: "Grace Brandt"
 date: "2025-05-02"
-output: pdf_document
+output:
+  html_document:
+    df_print: paged
 ---
 
 ```{r setup, include=FALSE}
