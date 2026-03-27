@@ -7,7 +7,7 @@ The dataset used for this project (Credit) can be found in the ISLR2 package in 
 - StatCompProject.Rmd (see code)
 - StatCompProject.html (see code and outputs)
 
-## Skills and Analyses Used
+## Skills and Methods
 - Univariate and Multivariate Exploratory Data Analysis (EDA)
 - Data visualization
 - Correlation
