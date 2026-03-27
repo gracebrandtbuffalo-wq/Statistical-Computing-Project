@@ -1,4 +1,4 @@
-# Statistical-Computing-Project
+# Statistical Computing Project - Analysis of Credit
 
 This project analyzes credit card balances and their relationship with various demographic and financial factors. 
 The dataset used for this project (Credit) can be found in the ISLR2 package in R. 
